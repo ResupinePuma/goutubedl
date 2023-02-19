@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/wader/goutubedl"
+	"github.com/ResupinePuma/goutubedl"
 )
 
 func main() {

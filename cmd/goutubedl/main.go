@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/wader/goutubedl"
+	"github.com/ResupinePuma/goutubedl"
 )
 
 var dumpFlag = flag.Bool("J", false, "Dump JSON")

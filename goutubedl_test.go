@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/fortytw2/leaktest"
-	"github.com/wader/goutubedl"
+	"github.com/ResupinePuma/goutubedl"
 	"github.com/wader/osleaktest"
 )
 
