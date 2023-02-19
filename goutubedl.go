@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -282,12 +281,12 @@ func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info
 		)
 	}
 
-	tempPath, _ := ioutil.TempDir("", "ydls")
+	tempPath, _ := os.MkdirTemp("", "ydls")
 	defer os.RemoveAll(tempPath)
 
 	stdoutBuf := &bytes.Buffer{}
 	stderrBuf := &bytes.Buffer{}
-	stderrWriter := ioutil.Discard
+	stderrWriter := io.Discard
 	if options.StderrFn != nil {
 		stderrWriter = options.StderrFn(cmd)
 	}
@@ -361,7 +360,7 @@ func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info
 	if options.DownloadThumbnail && info.Thumbnail != "" {
 		resp, respErr := get(info.Thumbnail)
 		if respErr == nil {
-			buf, _ := ioutil.ReadAll(resp.Body)
+			buf, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			info.ThumbnailBytes = buf
 		}
@@ -378,7 +377,7 @@ func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info
 			for i, subtitle := range subtitles {
 				resp, respErr := get(subtitle.URL)
 				if respErr == nil {
-					buf, _ := ioutil.ReadAll(resp.Body)
+					buf, _ := io.ReadAll(resp.Body)
 					resp.Body.Close()
 					subtitles[i].Bytes = buf
 				}
@@ -410,26 +409,28 @@ type Result struct {
 
 // DownloadResult download result
 type DownloadResult struct {
-	reader io.ReadCloser
-	waitCh chan struct{}
+	reader  io.ReadCloser
+	waitCh  chan struct{}
+	tmpPath string
+	size    int64
 }
 
 // Download format matched by filter (usually a format id or "best").
 // Filter should not be a combine filter like "1+2" as then youtube-dl
 // won't write to stdout.
-func (result Result) Download(ctx context.Context, filter string) (*DownloadResult, error) {
+func (result Result) DownloadStream(ctx context.Context, filter string) (*DownloadResult, error) {
 	debugLog := result.Options.DebugLog
 
 	if result.Info.Type == "playlist" || result.Info.Type == "multi_video" {
 		return nil, fmt.Errorf("can't download a playlist")
 	}
 
-	tempPath, tempErr := ioutil.TempDir("", "ydls")
+	tempPath, tempErr := os.MkdirTemp("", "ydls")
 	if tempErr != nil {
 		return nil, tempErr
 	}
 	jsonTempPath := path.Join(tempPath, "info.json")
-	if err := ioutil.WriteFile(jsonTempPath, result.RawJSON, 0600); err != nil {
+	if err := os.WriteFile(jsonTempPath, result.RawJSON, 0600); err != nil {
 		os.RemoveAll(tempPath)
 		return nil, err
 	}
@@ -459,7 +460,7 @@ func (result Result) Download(ctx context.Context, filter string) (*DownloadResu
 	var w io.WriteCloser
 	dr.reader, w = io.Pipe()
 
-	stderrWriter := ioutil.Discard
+	stderrWriter := io.Discard
 	if result.Options.StderrFn != nil {
 		stderrWriter = result.Options.StderrFn(cmd)
 	}
@@ -482,14 +483,91 @@ func (result Result) Download(ctx context.Context, filter string) (*DownloadResu
 	return dr, nil
 }
 
+// Download format matched by filter (usually a format id or "best").
+// Use caching. Works with filters
+func (result Result) Download(ctx context.Context, filter string) (*DownloadResult, error) {
+	debugLog := result.Options.DebugLog
+
+	if result.Info.Type == "playlist" || result.Info.Type == "multi_video" {
+		return nil, fmt.Errorf("can't download a playlist")
+	}
+
+	tempPath, tempErr := os.MkdirTemp("", "vf")
+	if tempErr != nil {
+		return nil, tempErr
+	}
+	jsonTempPath := path.Join(tempPath, "info.json")
+	if err := os.WriteFile(jsonTempPath, result.RawJSON, 0600); err != nil {
+		os.RemoveAll(tempPath)
+		return nil, err
+	}
+
+	dr := &DownloadResult{
+		waitCh:  make(chan struct{}),
+		tmpPath: tempPath,
+	}
+
+	cmd := exec.CommandContext(
+		ctx,
+		Path,
+		"--no-call-home",
+		"--no-cache-dir",
+		"--ignore-errors",
+		"--newline",
+		"--restrict-filenames",
+		"--load-info", jsonTempPath,
+		"-o", "result.mp4",
+	)
+	// don't need to specify if direct as there is only one
+	// also seems to be issues when using filter with generic extractor
+	if !result.Info.Direct {
+		cmd.Args = append(cmd.Args, "-f", filter)
+	}
+
+	cmd.Dir = tempPath
+
+	stderrWriter := io.Discard
+	if result.Options.StderrFn != nil {
+		stderrWriter = result.Options.StderrFn(cmd)
+	}
+	cmd.Stderr = stderrWriter
+
+	debugLog.Print("cmd", " ", cmd.Args)
+	if err := cmd.Start(); err != nil {
+		os.RemoveAll(tempPath)
+		return nil, err
+	}
+
+	cmd.Wait()
+
+	file, err := os.Open(path.Join(tempPath, "result.mp4"))
+	if err != nil {
+		return nil, err
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	dr.size = stat.Size()
+
+	dr.reader = file
+	close(dr.waitCh)
+	return dr, nil
+}
+
 func (dr *DownloadResult) Read(p []byte) (n int, err error) {
 	return dr.reader.Read(p)
+}
+
+func (dr *DownloadResult) Size() (n int64) {
+	return dr.size
 }
 
 // Close downloader and wait for resource cleanup
 func (dr *DownloadResult) Close() error {
 	err := dr.reader.Close()
 	<-dr.waitCh
+	os.RemoveAll(dr.tmpPath)
 	return err
 }
 
