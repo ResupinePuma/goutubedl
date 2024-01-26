@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fortytw2/leaktest"
 	"github.com/ResupinePuma/goutubedl"
+	"github.com/fortytw2/leaktest"
 	"github.com/wader/osleaktest"
 )
 
@@ -131,9 +131,6 @@ func TestDownload(t *testing.T) {
 	}
 }
 
-
-
-
 func TestParseInfo(t *testing.T) {
 	for _, c := range []struct {
 		url           string
@@ -148,6 +145,7 @@ func TestParseInfo(t *testing.T) {
 
 			ctx, cancelFn := context.WithCancel(context.Background())
 			ydlResult, err := goutubedl.New(ctx, c.url, goutubedl.Options{
+				Format:            "best",
 				DownloadThumbnail: true,
 			})
 			if err != nil {

@@ -201,8 +201,9 @@ var TypeFromString = map[string]Type{
 // Options for New()
 type Options struct {
 	Type              Type
-	PlaylistStart     uint // --playlist-start
-	PlaylistEnd       uint // --playlist-end
+	Format            string // get metadata for selected format
+	PlaylistStart     uint   // --playlist-start
+	PlaylistEnd       uint   // --playlist-end
 	DownloadThumbnail bool
 	DownloadSubtitles bool
 	DebugLog          Printer
@@ -275,6 +276,9 @@ func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info
 			cmd.Args = append(cmd.Args,
 				"--all-subs",
 			)
+		}
+		if options.Format != "" {
+			cmd.Args = append(cmd.Args, "-f", options.Format)
 		}
 		cmd.Args = append(cmd.Args,
 			"--no-playlist",
