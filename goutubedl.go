@@ -207,6 +207,7 @@ type Options struct {
 	DownloadThumbnail bool
 	DownloadSubtitles bool
 	DebugLog          Printer
+	HttpHeaders       http.Header
 	StderrFn          func(cmd *exec.Cmd) io.Writer // if not nil, function to get Writer for stderr
 	HTTPClient        *http.Client                  // Client for download thumbnail and subtitles (nil use http.DefaultClient)
 }
@@ -283,6 +284,13 @@ func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info
 		cmd.Args = append(cmd.Args,
 			"--no-playlist",
 		)
+	}
+
+	if options.HttpHeaders != nil {
+		for k, v := range options.HttpHeaders {
+			line := fmt.Sprintf("%s: %s", k, strings.Join(v, "; "))
+			cmd.Args = append(cmd.Args, "--add-header", line)
+		}
 	}
 
 	tempPath, _ := os.MkdirTemp("", "ydls")
