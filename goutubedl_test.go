@@ -310,7 +310,7 @@ func TestErrorNotASingleEntry(t *testing.T) {
 func TestListExtractors(t *testing.T) {
 	tests := []struct {
 		name    string
-		want    map[string]string
+		want    map[string][]string
 		wantErr bool
 	}{
 		{},

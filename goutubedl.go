@@ -246,7 +246,7 @@ func New(ctx context.Context, rawURL string, options Options) (result Result, er
 	}, nil
 }
 
-func ListExtractors() (map[string]string, error) {
+func ListExtractors() (map[string][]string, error) {
 	cmd := exec.Command(
 		Path,
 		"--list-extractors",
@@ -259,7 +259,7 @@ func ListExtractors() (map[string]string, error) {
 		return nil, err
 	}
 
-	res := map[string]string{}
+	res := map[string][]string{}
 	for _, s := range strings.Split(stdoutBuf.String(), "\n") {
 		ex := strings.ToLower(s)
 		if strings.Contains(ex, "broken") {
@@ -274,11 +274,23 @@ func ListExtractors() (map[string]string, error) {
 			parts := strings.Split(ex, ".")
 			for i := 1; i <= len(parts); i++ {
 				ex := strings.Join(parts[:i], ".")
-				res[ex] = s
+				v, ok := res[ex]
+				if ok {
+					v = append(v, s)
+					res[ex] = v
+				} else {
+					res[ex] = []string{s}
+				}
 			}
 		}
 
-		res[ex] = s
+		v, ok := res[ex]
+		if ok {
+			v = append(v, s)
+			res[ex] = v
+		} else {
+			res[ex] = []string{s}
+		}
 	}
 
 	return res, err
