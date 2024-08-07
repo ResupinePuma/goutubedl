@@ -206,6 +206,7 @@ type Options struct {
 	PlaylistEnd       uint   // --playlist-end
 	DownloadThumbnail bool
 	DownloadSubtitles bool
+	Extractors        []string
 	DebugLog          Printer
 	HttpHeaders       http.Header
 	StderrFn          func(cmd *exec.Cmd) io.Writer // if not nil, function to get Writer for stderr
@@ -243,6 +244,44 @@ func New(ctx context.Context, rawURL string, options Options) (result Result, er
 		RawJSON: rawJSONCopy,
 		Options: options,
 	}, nil
+}
+
+func ListExtractors() (map[string]string, error) {
+	cmd := exec.Command(
+		Path,
+		"--list-extractors",
+	)
+	stdoutBuf := &bytes.Buffer{}
+	cmd.Stdout = stdoutBuf
+
+	err := cmd.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[string]string{}
+	for _, s := range strings.Split(stdoutBuf.String(), "\n") {
+		ex := strings.ToLower(s)
+		if strings.Contains(ex, "broken") {
+			continue
+		}
+
+		if strings.Contains(ex, ":") {
+			ex = strings.Split(ex, ":")[0]
+		}
+
+		if strings.Contains(ex, ".") {
+			parts := strings.Split(ex, ".")
+			for i := 1; i <= len(parts); i++ {
+				ex := strings.Join(parts[:i], ".")
+				res[ex] = s
+			}
+		}
+
+		res[ex] = s
+	}
+
+	return res, err
 }
 
 func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info, rawJSON []byte, err error) {
@@ -291,6 +330,10 @@ func infoFromURL(ctx context.Context, rawURL string, options Options) (info Info
 			line := fmt.Sprintf("%s: %s", k, strings.Join(v, "; "))
 			cmd.Args = append(cmd.Args, "--add-header", line)
 		}
+	}
+
+	if options.Extractors != nil {
+		cmd.Args = append(cmd.Args, "--use-extractors", strings.Join(options.Extractors, ","))
 	}
 
 	tempPath, _ := os.MkdirTemp("", "ydls")

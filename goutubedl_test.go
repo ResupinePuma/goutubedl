@@ -1,8 +1,5 @@
 package goutubedl_test
 
-// TODO: currently the tests only run on linux as they use osleaktest which only
-// has linux support
-
 import (
 	"bytes"
 	"context"
@@ -307,5 +304,27 @@ func TestErrorNotASingleEntry(t *testing.T) {
 	})
 	if ydlResultErr != goutubedl.ErrNotASingleEntry {
 		t.Errorf("expected is single entry error, got %s", ydlResultErr)
+	}
+}
+
+func TestListExtractors(t *testing.T) {
+	tests := []struct {
+		name    string
+		want    map[string]string
+		wantErr bool
+	}{
+		{},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := goutubedl.ListExtractors()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ListExtractors() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got == nil {
+				t.Errorf("ListExtractors() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
